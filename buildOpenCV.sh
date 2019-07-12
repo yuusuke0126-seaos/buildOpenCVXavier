@@ -2,7 +2,7 @@
 # License: MIT. See license file in root directory
 # Copyright(c) JetsonHacks (2017-2018)
 
-OPENCV_VERSION=3.4.3
+OPENCV_VERSION=3.4.6
 # Jetson AGX Xavier
 ARCH_BIN=7.2
 # Jetson TX2
@@ -16,8 +16,15 @@ INSTALL_DIR=/usr/local
 # Make sure that you set this to YES
 # Value should be YES or NO
 DOWNLOAD_OPENCV_EXTRAS=NO
+
+# Download the opencv_contrib repository
+# Make sure that you set this to YES
+# Value should be YES or NO
+DOWNLOAD_OPENCV_CONTRIB=YES
+
+
 # Source code directory
-OPENCV_SOURCE_DIR=$HOME
+OPENCV_SOURCE_DIR=/home/nvidia/src
 WHEREAMI=$PWD
 
 CLEANUP=true
@@ -64,6 +71,10 @@ if [ $DOWNLOAD_OPENCV_EXTRAS == "YES" ] ; then
  echo "Also installing opencv_extras"
 fi
 
+if [ $DOWNLOAD_OPENCV_CONTRIB == "YES" ] ; then
+ echo "Also installing opencv_contrib"
+fi
+
 # Repository setup
 sudo apt-add-repository universe
 sudo apt-get update
@@ -72,7 +83,7 @@ sudo apt-get update
 cd $WHEREAMI
 # For Ubuntu 18.04, add for OpenGL, ie
 # sudo apt-get install libgl1 libglvnd-dev
- 
+
 sudo apt-get install -y \
     cmake \
     libavcodec-dev \
@@ -99,7 +110,7 @@ sudo apt-get install -y \
 
 # https://devtalk.nvidia.com/default/topic/1007290/jetson-tx2/building-opencv-with-opengl-support-/post/5141945/#5141945
 cd /usr/local/cuda/include
-sudo patch -N cuda_gl_interop.h $WHEREAMI'/patches/OpenGLHeader.patch' 
+sudo patch -N cuda_gl_interop.h $WHEREAMI'/patches/OpenGLHeader.patch'
 # Clean up the OpenGL tegra libs that usually get crushed
 cd /usr/lib/aarch64-linux-gnu/
 # sudo ln -sf tegra/libGL.so libGL.so
@@ -110,7 +121,7 @@ sudo apt-get install -y python-dev python-numpy python-py python-pytest
 sudo apt-get install -y python3-dev python3-numpy python3-py python3-pytest
 
 # GStreamer support
-sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev 
+sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
 cd $OPENCV_SOURCE_DIR
 git clone https://github.com/opencv/opencv.git
@@ -125,6 +136,16 @@ if [ $DOWNLOAD_OPENCV_EXTRAS == "YES" ] ; then
  cd opencv_extra
  git checkout -b v${OPENCV_VERSION} ${OPENCV_VERSION}
 fi
+
+if [ $DOWNLOAD_OPENCV_CONTRIB == "YES" ] ; then
+ echo "Installing opencv_contrib"
+ # This is for the test data
+ cd $OPENCV_SOURCE_DIR
+ git clone https://github.com/opencv/opencv_contrib.git
+ cd opencv_contrib
+ git checkout -b v${OPENCV_VERSION} ${OPENCV_VERSION}
+fi
+
 
 cd $OPENCV_SOURCE_DIR/opencv
 mkdir build
@@ -142,8 +163,27 @@ cd build
 #     -D CUDA_NVCC_FLAGS="--expt-relaxed-constexpr" \
 #     -D WITH_TBB=ON \
 
-
-time cmake -D CMAKE_BUILD_TYPE=RELEASE \
+if [ $DOWNLOAD_OPENCV_CONTRIB == "YES" ] ; then
+ time cmake -D CMAKE_BUILD_TYPE=RELEASE \
+      -D CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
+      -D WITH_CUDA=ON \
+      -D CUDA_ARCH_BIN=${ARCH_BIN} \
+      -D CUDA_ARCH_PTX="" \
+      -D ENABLE_FAST_MATH=ON \
+      -D CUDA_FAST_MATH=ON \
+      -D WITH_CUBLAS=ON \
+      -D WITH_LIBV4L=ON \
+      -D WITH_GSTREAMER=ON \
+      -D WITH_GSTREAMER_0_10=OFF \
+      -D WITH_QT=ON \
+      -D WITH_OPENGL=ON \
+      -D CUDA_NVCC_FLAGS="--expt-relaxed-constexpr" \
+      -D WITH_TBB=ON \
+      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+      -D OPENCV_ENABLE_NONFREE=ON \
+      ../
+else
+ time cmake -D CMAKE_BUILD_TYPE=RELEASE \
       -D CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} \
       -D WITH_CUDA=ON \
       -D CUDA_ARCH_BIN=${ARCH_BIN} \
@@ -159,6 +199,8 @@ time cmake -D CMAKE_BUILD_TYPE=RELEASE \
       -D CUDA_NVCC_FLAGS="--expt-relaxed-constexpr" \
       -D WITH_TBB=ON \
       ../
+fi
+
 
 if [ $? -eq 0 ] ; then
   echo "CMake configuration make successful"
